@@ -571,7 +571,7 @@ st.info(
 # ─────────────────────────────────────────────────────────────────────
 # Tab-Navigation
 # ─────────────────────────────────────────────────────────────────────
-TAB_LABELS = ["📊  Marktanalyse", "🔎  Jobsuche", "📚  Methodik"]
+TAB_LABELS = ["🔎  Jobsuche", "📊  Marktanalyse", "📚  Methodik"]
 
 selected_tab = st.radio(
     "Navigation", options=TAB_LABELS, horizontal=True,
@@ -585,9 +585,9 @@ st.markdown("<hr style='margin-top:0;margin-bottom:1.5rem;'>", unsafe_allow_html
 # Tab-Inhalt
 # ─────────────────────────────────────────────────────────────────────
 if selected_tab == TAB_LABELS[0]:
-    marktanalyse.render(jobs, skills)
-elif selected_tab == TAB_LABELS[1]:
     jobsuche.render(jobs_with_skills)
+elif selected_tab == TAB_LABELS[1]:
+    marktanalyse.render(jobs, skills)
 else:
     methodik.render(jobs, skills)
 

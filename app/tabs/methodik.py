@@ -323,8 +323,9 @@ def render(jobs: pd.DataFrame, skills: pd.DataFrame):
     # ─────────────────────────────────────────────────────────────────
     st.markdown("##### 🔗 Repository")
     st.markdown(
-        "<a href='https://github.com/' target='_blank' style='color:#a5b4fc;'>"
-        "GitHub: job-market-analyzer →</a>",
+        "<a href='https://github.com/l1ghty34r/job-market-analyzer' "
+        "target='_blank' style='color:#a5b4fc;'>"
+        "GitHub: l1ghty34r/job-market-analyzer →</a>",
         unsafe_allow_html=True,
     )
     st.caption("Portfolio-Projekt im Rahmen der Weiterbildung zum Data Analyst.")
