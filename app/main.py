@@ -291,13 +291,19 @@ def get_latest_workflow_run() -> dict | None:
 
 
 def run_pipeline_cloud(skip_collect: bool) -> None:
-    """Triggert GitHub Actions, zeigt Live-Status."""
+    """Triggert GitHub Actions, zeigt Live-Status und aktualisiert automatisch."""
     with st.status("🔄 Pipeline läuft auf GitHub Actions…", expanded=True) as status:
         st.markdown("**1/3  Workflow triggern**")
-        success, msg = trigger_github_workflow(skip_collect)
 
+        # Wichtig: Vorher den letzten Run-Timestamp merken, um den NEUEN
+        # Run vom alten zu unterscheiden
+        prev_run = get_latest_workflow_run()
+        prev_run_id = prev_run.get("id") if prev_run else None
+
+        success, msg = trigger_github_workflow(skip_collect)
         if not success:
-            status.update(label="❌ Workflow konnte nicht gestartet werden", state="error")
+            status.update(label="❌ Workflow konnte nicht gestartet werden",
+                          state="error")
             st.error(f"Fehler: {msg}")
             return
 
@@ -305,25 +311,97 @@ def run_pipeline_cloud(skip_collect: bool) -> None:
         st.markdown("**2/3  Auf Workflow-Start warten** (~5 Sek.)")
         time.sleep(6)
 
-        # Letzten Run holen, Link anzeigen
-        run = get_latest_workflow_run()
-        if run:
-            run_url = run.get("html_url", "")
-            st.markdown(
-                f'**3/3  Workflow läuft** &nbsp;'
-                f'[**→ Auf GitHub verfolgen**]({run_url})'
-            )
-            st.info(
-                "⏱️ Die Pipeline läuft jetzt im Hintergrund auf GitHub Actions "
-                "und dauert **5–10 Minuten**. Du kannst die Seite schließen — "
-                "die Daten landen automatisch in der Datenbank.\n\n"
-                "Nach Abschluss: einfach 'Nur Cache leeren' klicken, "
-                "um die neuen Daten zu sehen."
-            )
-        else:
-            st.warning("Workflow gestartet, aber Status nicht abrufbar.")
+        # Neuen Run holen — der hat eine andere ID als der alte
+        new_run = None
+        for _ in range(6):
+            latest = get_latest_workflow_run()
+            if latest and latest.get("id") != prev_run_id:
+                new_run = latest
+                break
+            time.sleep(2)
 
-        status.update(label="✅ Workflow gestartet", state="complete")
+        if not new_run:
+            st.warning("Workflow gestartet, aber Status-Tracking nicht verfügbar.")
+            status.update(label="⚠️ Workflow gestartet (Status unbekannt)",
+                          state="complete")
+            return
+
+        run_url = new_run.get("html_url", "")
+        st.markdown(
+            f"**3/3  Workflow läuft** &nbsp; "
+            f"[**→ Auf GitHub verfolgen**]({run_url})"
+        )
+
+        # Polling: alle 10 Sek. den Status prüfen, max 12 Min
+        progress = st.empty()
+        elapsed_info = st.empty()
+
+        max_wait = 12 * 60  # 12 Minuten
+        check_interval = 10
+        elapsed = 0
+
+        while elapsed < max_wait:
+            current = _get_workflow_run_by_id(new_run["id"])
+            if not current:
+                break
+
+            run_status = current.get("status")
+            conclusion = current.get("conclusion")
+
+            elapsed_min = elapsed // 60
+            elapsed_sec = elapsed % 60
+            elapsed_info.caption(
+                f"⏱️ Läuft seit {elapsed_min}:{elapsed_sec:02d} Min …"
+            )
+
+            if run_status == "completed":
+                if conclusion == "success":
+                    progress.success("✅ Pipeline erfolgreich abgeschlossen!")
+                    status.update(label="✅ Daten aktualisiert!",
+                                  state="complete")
+                    st.cache_data.clear()
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    progress.error(
+                        f"❌ Pipeline fehlgeschlagen ({conclusion}). "
+                        f"[Logs anschauen →]({run_url})"
+                    )
+                    status.update(label="❌ Pipeline fehlgeschlagen",
+                                  state="error")
+                return
+
+            progress.info(f"⏳ {run_status or 'wartet auf Runner'} …")
+            time.sleep(check_interval)
+            elapsed += check_interval
+
+        # Timeout
+        progress.warning(
+            f"⏱️ Pipeline läuft länger als erwartet. "
+            f"[Status auf GitHub prüfen →]({run_url})\n\n"
+            "Du kannst den Browser-Tab schließen — sobald der Workflow durch ist, "
+            "klick einfach auf 'Nur Cache leeren'."
+        )
+        status.update(label="⏱️ Polling gestoppt — Workflow läuft im Hintergrund",
+                      state="complete")
+
+
+def _get_workflow_run_by_id(run_id: int) -> dict | None:
+    """Holt einen spezifischen Run-Status (für Polling)."""
+    import requests
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+    except Exception:
+        pass
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────
