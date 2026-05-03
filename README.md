@@ -265,31 +265,6 @@ Schema wird beim Loader-Lauf automatisch migriert (z.B. fehlende Spalten ergänz
 
 ---
 
-## 🗺️ Roadmap
-
-### Erledigt ✅
-- [x] Multi-Source-Pipeline mit abstrakter Basisklasse
-- [x] Live-Remote-Erkennung mit 14 Regex-Patterns
-- [x] Streamlit Cloud Deployment
-- [x] GitHub Actions für tägliche Daten-Updates
-- [x] Auto-Polling-Pipeline-Trigger aus dem Dashboard
-- [x] PostgreSQL-Backend mit Auto-Schema-Migration
-- [x] 4 dokumentierte Jupyter-Notebooks
-
-### Geplant
-- [ ] Salary-Prediction-Modell mit scikit-learn
-- [ ] TF-IDF basierte automatische Skill-Discovery
-- [ ] Cross-Source-Deduplizierung über (Title + Employer)-Hashing
-- [ ] Zeitreihen-Tracking für Trend-Analysen
-
----
-
-## 📜 Lizenz
-
-MIT — siehe [LICENSE](LICENSE)
-
 ## 👤 Autor
 
-**Michael** ([@l1ghty34r](https://github.com/l1ghty34r)) — Portfolio-Projekt im Rahmen der Weiterbildung zum Data Analyst.
-
-🔗 [GitHub](https://github.com/l1ghty34r) · [Live-Demo](https://data-job-market-de.streamlit.app)
+**Michael Winkels** ([@l1ghty34r](https://github.com/l1ghty34r)) 
