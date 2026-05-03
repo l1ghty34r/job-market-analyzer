@@ -1,18 +1,18 @@
 """
 Data Job Market Analyzer Germany — Single-Page Dashboard.
 
-Tab-basierte Navigation, kein Sidebar-Menü. Die App hat 3 Tabs:
-  1. 📊 Marktanalyse — Markt-Übersicht
-  2. 🔎 Jobsuche    — Personalisierte Jobsuche
-  3. 📚 Methodik    — Pipeline & Limitationen
+Aktualisieren-Button:
+  - Lokal: ruft die Pipeline direkt via subprocess auf
+  - Cloud: triggert GitHub Actions Workflow via API
 
-Run:
-    streamlit run app/main.py
+Erkennung Cloud vs. Lokal: env-Variable `STREAMLIT_RUNTIME` oder
+das Vorhandensein von `GITHUB_TOKEN` in den secrets.
 """
 
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -51,14 +51,8 @@ st.markdown(
     }
 
     /* ─── Typografie ─────────────────────────────────────────────── */
-    h1 {
-        font-weight: 700 !important;
-        letter-spacing: -0.02em;
-    }
-    h2, h3, h4, h5 {
-        font-weight: 600 !important;
-        letter-spacing: -0.01em;
-    }
+    h1 { font-weight: 700 !important; letter-spacing: -0.02em; }
+    h2, h3, h4, h5 { font-weight: 600 !important; letter-spacing: -0.01em; }
 
     /* ─── Tab-Navigation (Radio als Pills) ───────────────────────── */
     div[role="radiogroup"] {
@@ -86,11 +80,8 @@ st.markdown(
         background: rgba(129, 140, 248, 0.18);
         color: #c7d2fe;
         font-weight: 600;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
-    div[role="radiogroup"] > label > div:first-child {
-        display: none;
-    }
+    div[role="radiogroup"] > label > div:first-child { display: none; }
 
     /* ─── Buttons ────────────────────────────────────────────────── */
     .stButton button {
@@ -105,50 +96,19 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(129, 140, 248, 0.15);
     }
 
-    /* ─── Inputs polieren ────────────────────────────────────────── */
-    .stTextInput input,
-    .stMultiSelect div[data-baseweb="select"],
-    .stSelectbox div[data-baseweb="select"] {
-        border-radius: 8px;
-        transition: border-color 0.15s ease;
-    }
-    .stTextInput input:focus {
-        border-color: #818cf8;
-    }
-
-    /* ─── Metric-Cards eleganter ─────────────────────────────────── */
+    /* ─── Metric-Cards ───────────────────────────────────────────── */
     [data-testid="stMetric"] {
         background: rgba(30, 41, 59, 0.4);
         border: 1px solid rgba(129, 140, 248, 0.15);
         border-radius: 12px;
         padding: 16px 20px;
-        transition: all 0.2s ease;
-    }
-    [data-testid="stMetric"]:hover {
-        border-color: rgba(129, 140, 248, 0.4);
-        background: rgba(30, 41, 59, 0.6);
-    }
-    [data-testid="stMetricLabel"] {
-        color: #94a3b8 !important;
-        font-size: 0.85em !important;
-    }
-    [data-testid="stMetricValue"] {
-        color: #e2e8f0 !important;
-        font-weight: 700 !important;
     }
 
-    /* ─── Info-Boxen / Datenstand-Bar ────────────────────────────── */
+    /* ─── Info-Boxen ─────────────────────────────────────────────── */
     div[data-testid="stAlert"] {
         border-radius: 10px;
         border: 1px solid rgba(129, 140, 248, 0.2);
         background: rgba(30, 41, 59, 0.5);
-    }
-
-    /* ─── Pillen-Filter (st.pills) ───────────────────────────────── */
-    button[kind="pillsButton"],
-    button[data-baseweb="button"][kind="pills"] {
-        border-radius: 8px !important;
-        transition: all 0.15s ease !important;
     }
 
     /* ─── Expander ───────────────────────────────────────────────── */
@@ -156,55 +116,21 @@ st.markdown(
         border-radius: 10px;
         border-color: rgba(129, 140, 248, 0.15) !important;
     }
-    [data-testid="stExpander"] summary {
-        font-weight: 500;
-        color: #c7d2fe;
-    }
 
-    /* ─── Dataframes / Tables ────────────────────────────────────── */
-    div[data-testid="stDataFrame"] {
-        border-radius: 10px;
-        overflow: hidden;
-        border: 1px solid rgba(129, 140, 248, 0.15);
-    }
-
-    /* ─── Toggle-Switches ────────────────────────────────────────── */
-    div[data-baseweb="checkbox"][role="checkbox"] {
-        border-radius: 4px;
-    }
-
-    /* ─── Captions ───────────────────────────────────────────────── */
-    .stCaption, [data-testid="stCaptionContainer"] {
-        color: #94a3b8 !important;
-    }
-
-    /* ─── Horizontale Trennlinien ────────────────────────────────── */
+    /* ─── Trennlinien ────────────────────────────────────────────── */
     hr {
         border-color: rgba(129, 140, 248, 0.15) !important;
         margin: 1.5rem 0 !important;
     }
 
-    /* ─── Popover (Aktualisieren-Menü) ───────────────────────────── */
-    div[data-testid="stPopoverBody"] {
-        background: rgba(15, 23, 42, 0.95);
-        border-radius: 12px;
-    }
-
     /* ─── Scrollbar ──────────────────────────────────────────────── */
-    ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    ::-webkit-scrollbar-track {
-        background: rgba(30, 41, 59, 0.3);
-    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.3); }
     ::-webkit-scrollbar-thumb {
         background: rgba(129, 140, 248, 0.3);
         border-radius: 5px;
     }
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(129, 140, 248, 0.5);
-    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(129, 140, 248, 0.5); }
     </style>
     """,
     unsafe_allow_html=True,
@@ -212,25 +138,35 @@ st.markdown(
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Helper: Pipeline-Schritt im UI ausführen
+# Cloud vs. Lokal erkennen
 # ─────────────────────────────────────────────────────────────────────
-def run_pipeline_step(name: str, cmd: list[str], log_placeholder) -> bool:
-    """Führt einen Pipeline-Schritt aus, loggt live in das Streamlit-UI."""
+def _read_secret(key: str, default: str = "") -> str:
+    """Liest aus st.secrets ODER os.environ."""
+    try:
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
+
+# Cloud-Modus = wenn GITHUB_TOKEN gesetzt ist (für Workflow-Trigger)
+GITHUB_TOKEN = _read_secret("GITHUB_TOKEN", "")
+GITHUB_REPO = _read_secret("GITHUB_REPO", "")  # z.B. "user/job-market-analyzer"
+IS_CLOUD = bool(GITHUB_TOKEN and GITHUB_REPO)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Helpers: Lokale Pipeline (subprocess)
+# ─────────────────────────────────────────────────────────────────────
+def run_pipeline_step_local(name: str, cmd: list[str], log_placeholder) -> bool:
+    """Führt einen Pipeline-Schritt lokal via subprocess aus."""
     log_placeholder.markdown(f"▶ **{name}** läuft …")
     try:
-        # WICHTIG: encoding="utf-8" und PYTHONIOENCODING erzwingen UTF-8 auch
-        # auf Windows, sonst crashen Subprocess-Prints mit Sonderzeichen
-        # (Pfeile, Emojis, Umlaute) auf cp1252-Konsolen.
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         result = subprocess.run(
-            cmd,
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env=env,
-            timeout=600,
+            cmd, cwd=str(ROOT), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=env, timeout=600,
         )
         if result.returncode == 0:
             log_placeholder.success(f"✅ {name} fertig")
@@ -241,15 +177,15 @@ def run_pipeline_step(name: str, cmd: list[str], log_placeholder) -> bool:
         )
         return False
     except subprocess.TimeoutExpired:
-        log_placeholder.error(f"⏱️ {name} dauert zu lange (>10min) – Abbruch.")
+        log_placeholder.error(f"⏱️ {name} dauert zu lange (>10 min) – Abbruch.")
         return False
     except Exception as e:
         log_placeholder.error(f"❌ {name} crashed: {e}")
         return False
 
 
-def run_full_pipeline(skip_collect: bool, to_postgres: bool, truncate: bool) -> None:
-    """Führt die komplette Pipeline aus, mit Live-Status im UI."""
+def run_pipeline_local(skip_collect: bool, to_postgres: bool, truncate: bool) -> None:
+    """Lokale Pipeline mit Live-Status im UI."""
     python = sys.executable
 
     with st.status("🔄 Pipeline läuft…", expanded=True) as status:
@@ -257,10 +193,9 @@ def run_full_pipeline(skip_collect: bool, to_postgres: bool, truncate: bool) -> 
 
         if not skip_collect:
             step1 = st.empty()
-            ok = run_pipeline_step(
+            ok = run_pipeline_step_local(
                 "1/4  Daten von APIs holen",
-                [python, "-m", "src.collect_jobs"],
-                step1,
+                [python, "-m", "src.collect_jobs"], step1,
             )
             steps_ok = steps_ok and ok
         else:
@@ -268,19 +203,17 @@ def run_full_pipeline(skip_collect: bool, to_postgres: bool, truncate: bool) -> 
 
         if steps_ok:
             step2 = st.empty()
-            ok = run_pipeline_step(
+            ok = run_pipeline_step_local(
                 "2/4  Daten bereinigen",
-                [python, "-m", "src.clean_jobs"],
-                step2,
+                [python, "-m", "src.clean_jobs"], step2,
             )
             steps_ok = steps_ok and ok
 
         if steps_ok:
             step3 = st.empty()
-            ok = run_pipeline_step(
+            ok = run_pipeline_step_local(
                 "3/4  Skills extrahieren",
-                [python, "-m", "src.extract_skills"],
-                step3,
+                [python, "-m", "src.extract_skills"], step3,
             )
             steps_ok = steps_ok and ok
 
@@ -289,11 +222,7 @@ def run_full_pipeline(skip_collect: bool, to_postgres: bool, truncate: bool) -> 
             if truncate:
                 cmd.append("--truncate")
             step4 = st.empty()
-            ok = run_pipeline_step(
-                "4/4  PostgreSQL aktualisieren",
-                cmd,
-                step4,
-            )
+            ok = run_pipeline_step_local("4/4  PostgreSQL aktualisieren", cmd, step4)
             steps_ok = steps_ok and ok
         elif not to_postgres:
             st.markdown("⏭️  Schritt 4 (PostgreSQL) übersprungen")
@@ -303,12 +232,98 @@ def run_full_pipeline(skip_collect: bool, to_postgres: bool, truncate: bool) -> 
         else:
             status.update(label="❌ Pipeline fehlgeschlagen", state="error")
 
-    # Cache leeren, damit neue Daten geladen werden
     if steps_ok:
         st.cache_data.clear()
-        st.success("Daten aktualisiert! Lade die Seite neu, um die neuen Daten zu sehen.")
         if st.button("🔄 Seite neu laden"):
             st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Helpers: Cloud-Pipeline (GitHub Actions)
+# ─────────────────────────────────────────────────────────────────────
+def trigger_github_workflow(skip_collect: bool) -> tuple[bool, str]:
+    """Triggert den GitHub Actions Workflow via API.
+
+    Returns:
+        (success, message)
+    """
+    import requests
+
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/update-data.yml/dispatches"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    payload = {
+        "ref": "main",
+        "inputs": {
+            "skip_collect": str(skip_collect).lower(),
+        },
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        if response.status_code == 204:
+            return True, "Workflow gestartet"
+        return False, f"GitHub API antwortete mit {response.status_code}: {response.text[:200]}"
+    except Exception as e:
+        return False, f"Verbindungsfehler: {e}"
+
+
+def get_latest_workflow_run() -> dict | None:
+    """Holt den neuesten Workflow-Run-Status. None falls Fehler."""
+    import requests
+
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/update-data.yml/runs"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    }
+    try:
+        response = requests.get(url, headers=headers, params={"per_page": 1}, timeout=10)
+        if response.status_code == 200:
+            runs = response.json().get("workflow_runs", [])
+            return runs[0] if runs else None
+    except Exception:
+        pass
+    return None
+
+
+def run_pipeline_cloud(skip_collect: bool) -> None:
+    """Triggert GitHub Actions, zeigt Live-Status."""
+    with st.status("🔄 Pipeline läuft auf GitHub Actions…", expanded=True) as status:
+        st.markdown("**1/3  Workflow triggern**")
+        success, msg = trigger_github_workflow(skip_collect)
+
+        if not success:
+            status.update(label="❌ Workflow konnte nicht gestartet werden", state="error")
+            st.error(f"Fehler: {msg}")
+            return
+
+        st.success(f"✅ {msg}")
+        st.markdown("**2/3  Auf Workflow-Start warten** (~5 Sek.)")
+        time.sleep(6)
+
+        # Letzten Run holen, Link anzeigen
+        run = get_latest_workflow_run()
+        if run:
+            run_url = run.get("html_url", "")
+            st.markdown(
+                f'**3/3  Workflow läuft** &nbsp;'
+                f'[**→ Auf GitHub verfolgen**]({run_url})'
+            )
+            st.info(
+                "⏱️ Die Pipeline läuft jetzt im Hintergrund auf GitHub Actions "
+                "und dauert **5–10 Minuten**. Du kannst die Seite schließen — "
+                "die Daten landen automatisch in der Datenbank.\n\n"
+                "Nach Abschluss: einfach 'Nur Cache leeren' klicken, "
+                "um die neuen Daten zu sehen."
+            )
+        else:
+            st.warning("Workflow gestartet, aber Status nicht abrufbar.")
+
+        status.update(label="✅ Workflow gestartet", state="complete")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -327,39 +342,73 @@ with header_r:
     st.markdown("<div style='height:36px;'></div>", unsafe_allow_html=True)
     with st.popover("🔄 Aktualisieren", use_container_width=True):
         st.markdown("##### Daten aktualisieren")
-        st.caption("Sammelt neue Jobs und aktualisiert das Dashboard.")
 
-        skip_collect = st.checkbox(
-            "Ohne API-Sammlung (nur cleaning)",
-            value=False,
-            help="Verarbeitet vorhandene Rohdaten neu, ohne neue API-Calls.",
-            key="upd_skip_collect",
-        )
-        use_postgres_now = os.getenv("USE_POSTGRES", "").lower() == "true"
-        to_postgres = st.checkbox(
-            "PostgreSQL aktualisieren",
-            value=use_postgres_now,
-            help="Daten zusätzlich in Neon-DB schreiben.",
-            key="upd_to_postgres",
-        )
-        truncate = st.checkbox(
-            "Tabellen vorher leeren",
-            value=True,
-            help="Alte DB-Daten ersetzen (empfohlen).",
-            key="upd_truncate",
-            disabled=not to_postgres,
-        )
+        if IS_CLOUD:
+            st.caption(
+                "🌐 **Cloud-Modus:** Triggert GitHub Actions Workflow. "
+                "Pipeline läuft 5–10 Min. im Hintergrund."
+            )
 
-        if st.button("Jetzt starten", type="primary",
-                      use_container_width=True, key="run_pipeline_btn"):
-            run_full_pipeline(skip_collect, to_postgres, truncate)
+            skip_collect = st.checkbox(
+                "Ohne API-Sammlung (nur cleaning)",
+                value=False,
+                help="Nur cleaning + skill-extract + postgres-load (~1 min)",
+                key="cloud_skip_collect",
+            )
 
-        st.divider()
-        if st.button("Nur Cache leeren", use_container_width=True,
-                      key="cache_clear_btn",
-                      help="Lädt CSVs/Postgres neu, ohne Pipeline."):
-            st.cache_data.clear()
-            st.rerun()
+            if st.button("🚀 Workflow starten", type="primary",
+                          use_container_width=True, key="trigger_cloud_btn"):
+                run_pipeline_cloud(skip_collect)
+
+            st.divider()
+
+            # Status des letzten Runs anzeigen
+            latest = get_latest_workflow_run()
+            if latest:
+                conclusion = latest.get("conclusion") or "läuft…"
+                status_emoji = {
+                    "success": "✅", "failure": "❌",
+                    "cancelled": "⛔", "läuft…": "⏳",
+                }.get(conclusion, "❓")
+                st.caption(
+                    f"Letzter Run: {status_emoji} {conclusion} "
+                    f"([Details]({latest.get('html_url', '')}))"
+                )
+
+            st.divider()
+            if st.button("Nur Cache leeren", use_container_width=True,
+                          key="cloud_cache_clear",
+                          help="Lädt Daten aus Postgres neu, ohne Pipeline."):
+                st.cache_data.clear()
+                st.rerun()
+
+        else:
+            # Lokaler Modus: subprocess
+            st.caption("💻 **Lokal-Modus:** Pipeline läuft auf diesem Rechner.")
+
+            skip_collect = st.checkbox(
+                "Ohne API-Sammlung (nur cleaning)",
+                value=False, key="local_skip_collect",
+            )
+            use_postgres_now = _read_secret("USE_POSTGRES", "").lower() == "true"
+            to_postgres = st.checkbox(
+                "PostgreSQL aktualisieren",
+                value=use_postgres_now, key="local_to_postgres",
+            )
+            truncate = st.checkbox(
+                "Tabellen vorher leeren", value=True,
+                key="local_truncate", disabled=not to_postgres,
+            )
+
+            if st.button("Jetzt starten", type="primary",
+                          use_container_width=True, key="local_run_btn"):
+                run_pipeline_local(skip_collect, to_postgres, truncate)
+
+            st.divider()
+            if st.button("Nur Cache leeren", use_container_width=True,
+                          key="local_cache_clear"):
+                st.cache_data.clear()
+                st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -373,16 +422,28 @@ jobs_with_skills = load_jobs_with_skills()
 # ─────────────────────────────────────────────────────────────────────
 # Datenstand-Bar
 # ─────────────────────────────────────────────────────────────────────
-backend = "PostgreSQL" if os.getenv("USE_POSTGRES", "").lower() == "true" else "CSV"
+backend = "PostgreSQL" if _read_secret("USE_POSTGRES", "").lower() == "true" else "CSV"
 
-csv_path = ROOT / "data" / "processed" / "jobs_cleaned.csv"
+# Letzte Aktualisierung: bei Cloud aus letztem Workflow-Run, sonst Datei-mtime
 last_update = "?"
-if csv_path.exists():
-    try:
-        ts = datetime.fromtimestamp(csv_path.stat().st_mtime)
-        last_update = ts.strftime("%d.%m.%Y %H:%M")
-    except Exception:
-        pass
+if IS_CLOUD:
+    latest_run = get_latest_workflow_run()
+    if latest_run and latest_run.get("conclusion") == "success":
+        try:
+            ts = datetime.fromisoformat(
+                latest_run["updated_at"].replace("Z", "+00:00")
+            )
+            last_update = ts.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            pass
+else:
+    csv_path = ROOT / "data" / "processed" / "jobs_cleaned.csv"
+    if csv_path.exists():
+        try:
+            ts = datetime.fromtimestamp(csv_path.stat().st_mtime)
+            last_update = ts.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            pass
 
 source_summary = ""
 if "source" in jobs.columns and not jobs.empty:
@@ -398,16 +459,13 @@ st.info(
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Tab-Navigation mit st.radio (state-persistent!)
+# Tab-Navigation
 # ─────────────────────────────────────────────────────────────────────
 TAB_LABELS = ["📊  Marktanalyse", "🔎  Jobsuche", "📚  Methodik"]
 
 selected_tab = st.radio(
-    "Navigation",
-    options=TAB_LABELS,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="active_tab",
+    "Navigation", options=TAB_LABELS, horizontal=True,
+    label_visibility="collapsed", key="active_tab",
 )
 
 st.markdown("<hr style='margin-top:0;margin-bottom:1.5rem;'>", unsafe_allow_html=True)
