@@ -41,6 +41,7 @@ CREATE TABLE jobs (
     is_junior           SMALLINT NOT NULL DEFAULT 0 CHECK (is_junior IN (0, 1)),
     remote_type         VARCHAR(50),
     role_group          VARCHAR(50),
+    source              VARCHAR(50),
     inserted_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

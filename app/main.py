@@ -422,15 +422,22 @@ with header_r:
         st.markdown("##### Daten aktualisieren")
 
         if IS_CLOUD:
-            st.caption(
-                "🌐 **Cloud-Modus:** Triggert GitHub Actions Workflow. "
-                "Pipeline läuft 5–10 Min. im Hintergrund."
+            st.markdown(
+                "**🌐 Was passiert beim Aktualisieren?**\n\n"
+                "Ein GitHub Actions Workflow startet im Hintergrund:\n\n"
+                "1. **Sammeln:** Neue Stellenanzeigen von Bundesagentur für Arbeit + Adzuna\n"
+                "2. **Bereinigen:** Stadt-Extraktion, Skill-Detection, Klassifikation\n"
+                "3. **Speichern:** Daten landen in der PostgreSQL-Datenbank (Neon)\n\n"
+                "⏱️ **Dauer:** ~5–10 Minuten. Nach Abschluss aktualisiert sich "
+                "diese Seite automatisch mit den neuen Daten."
             )
+            st.markdown("")
 
             skip_collect = st.checkbox(
-                "Ohne API-Sammlung (nur cleaning)",
+                "Nur Cleaning, ohne neue Daten holen",
                 value=False,
-                help="Nur cleaning + skill-extract + postgres-load (~1 min)",
+                help="Schneller (~1 Min). Verarbeitet die bestehenden Daten "
+                     "neu, z.B. nach Code-Änderungen. Holt keine neuen Stellen.",
                 key="cloud_skip_collect",
             )
 
@@ -449,33 +456,48 @@ with header_r:
                     "cancelled": "⛔", "läuft…": "⏳",
                 }.get(conclusion, "❓")
                 st.caption(
-                    f"Letzter Run: {status_emoji} {conclusion} "
-                    f"([Details]({latest.get('html_url', '')}))"
+                    f"Letzter Workflow: {status_emoji} {conclusion} "
+                    f"([Details auf GitHub]({latest.get('html_url', '')}))"
                 )
 
             st.divider()
-            if st.button("Nur Cache leeren", use_container_width=True,
+            if st.button("🔄 Nur Cache leeren", use_container_width=True,
                           key="cloud_cache_clear",
-                          help="Lädt Daten aus Postgres neu, ohne Pipeline."):
+                          help="Lädt aktuelle Daten aus der Datenbank neu, "
+                               "ohne die Pipeline zu starten."):
                 st.cache_data.clear()
                 st.rerun()
 
         else:
             # Lokaler Modus: subprocess
-            st.caption("💻 **Lokal-Modus:** Pipeline läuft auf diesem Rechner.")
+            st.markdown(
+                "**💻 Was passiert beim Aktualisieren?**\n\n"
+                "Die Pipeline läuft auf deinem Rechner:\n\n"
+                "1. **Sammeln:** Neue Stellenanzeigen von Bundesagentur für Arbeit + Adzuna\n"
+                "2. **Bereinigen:** Stadt-Extraktion, Skill-Detection, Klassifikation\n"
+                "3. **Skills extrahieren:** Skill-Listen pro Stelle aufbauen\n"
+                "4. **Optional speichern:** Daten in PostgreSQL laden\n\n"
+                "⏱️ **Dauer:** ~5–10 Minuten."
+            )
+            st.markdown("")
 
             skip_collect = st.checkbox(
-                "Ohne API-Sammlung (nur cleaning)",
-                value=False, key="local_skip_collect",
+                "Nur Cleaning, ohne neue Daten holen",
+                value=False,
+                help="Schneller (~1 Min). Verarbeitet die bestehenden Daten neu.",
+                key="local_skip_collect",
             )
             use_postgres_now = _read_secret("USE_POSTGRES", "").lower() == "true"
             to_postgres = st.checkbox(
-                "PostgreSQL aktualisieren",
+                "Daten zusätzlich in PostgreSQL laden",
                 value=use_postgres_now, key="local_to_postgres",
+                help="Nur nötig wenn du das Postgres-Backend nutzt.",
             )
             truncate = st.checkbox(
-                "Tabellen vorher leeren", value=True,
+                "DB-Tabellen vorher leeren",
+                value=True,
                 key="local_truncate", disabled=not to_postgres,
+                help="Empfohlen — sorgt dafür, dass alte Jobs aus der DB entfernt werden.",
             )
 
             if st.button("Jetzt starten", type="primary",
@@ -483,8 +505,9 @@ with header_r:
                 run_pipeline_local(skip_collect, to_postgres, truncate)
 
             st.divider()
-            if st.button("Nur Cache leeren", use_container_width=True,
-                          key="local_cache_clear"):
+            if st.button("🔄 Nur Cache leeren", use_container_width=True,
+                          key="local_cache_clear",
+                          help="Lädt die CSVs neu, ohne die Pipeline auszuführen."):
                 st.cache_data.clear()
                 st.rerun()
 
@@ -500,10 +523,10 @@ jobs_with_skills = load_jobs_with_skills()
 # ─────────────────────────────────────────────────────────────────────
 # Datenstand-Bar
 # ─────────────────────────────────────────────────────────────────────
-backend = "PostgreSQL" if _read_secret("USE_POSTGRES", "").lower() == "true" else "CSV"
+backend_label = "PostgreSQL (Neon)" if _read_secret("USE_POSTGRES", "").lower() == "true" else "CSV (lokal)"
 
 # Letzte Aktualisierung: bei Cloud aus letztem Workflow-Run, sonst Datei-mtime
-last_update = "?"
+last_update = "—"
 if IS_CLOUD:
     latest_run = get_latest_workflow_run()
     if latest_run and latest_run.get("conclusion") == "success":
@@ -523,16 +546,25 @@ else:
         except Exception:
             pass
 
+# Quellen-Aufschlüsselung mit Mapping zu Klartext
+SOURCE_LABELS = {
+    "arbeitsagentur": "Bundesagentur für Arbeit",
+    "adzuna": "Adzuna",
+}
 source_summary = ""
 if "source" in jobs.columns and not jobs.empty:
     src_counts = jobs["source"].value_counts()
-    source_summary = " · ".join(f"{src}: {cnt}" for src, cnt in src_counts.items())
+    parts = []
+    for src, cnt in src_counts.items():
+        label = SOURCE_LABELS.get(str(src), str(src))
+        parts.append(f"{label}: **{cnt:,}**".replace(",", "."))
+    source_summary = " &nbsp;·&nbsp; ".join(parts)
 
 st.info(
-    f"📊 **{len(jobs):,} Jobs** geladen "
-    f"&nbsp;·&nbsp; Backend: **{backend}** "
-    f"&nbsp;·&nbsp; Letzte Aktualisierung: **{last_update}** "
-    + (f"&nbsp;·&nbsp; Quellen: {source_summary}" if source_summary else "")
+    f"📊 **{len(jobs):,} Jobs** geladen ".replace(",", ".")
+    + f"&nbsp;·&nbsp; Backend: **{backend_label}** "
+    + f"&nbsp;·&nbsp; Letzte Aktualisierung: **{last_update}**  \n"
+    + (f"📡 Quellen: {source_summary}" if source_summary else "")
 )
 
 

@@ -88,6 +88,27 @@ def parse_skills_field(value) -> list[str]:
         return []
 
 
+def ensure_schema_up_to_date(engine: Engine) -> None:
+    """Führt nötige Schema-Migrationen aus.
+
+    Idempotent — kann beliebig oft aufgerufen werden.
+    Prüft Spalten und fügt sie hinzu, falls sie fehlen.
+    """
+    migrations = [
+        # (Spalte existiert nicht? → Migration ausführen)
+        ("source", "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source VARCHAR(50);"),
+    ]
+    with engine.begin() as conn:
+        for column_name, migration_sql in migrations:
+            check = conn.execute(text(f"""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'jobs' AND column_name = '{column_name}';
+            """)).fetchone()
+            if not check:
+                print(f"🔧 Migration: ergänze Spalte '{column_name}' ...")
+                conn.execute(text(migration_sql))
+
+
 def truncate_tables(engine: Engine) -> None:
     """Leert alle Tabellen (CASCADE wegen Foreign Keys)."""
     print("⚠️  Leere alle Tabellen ...")
@@ -124,6 +145,7 @@ def load_jobs(engine: Engine, jobs_df: pd.DataFrame) -> int:
         "is_junior": "is_junior",
         "remote_type": "remote_type",
         "role_group": "role_group",
+        "source": "source",
     }
 
     # Nur vorhandene Spalten verwenden
@@ -260,7 +282,13 @@ def main(truncate: bool = False) -> None:
         print("   - Datenbank existiert nicht (CREATE DATABASE jobmarket;)")
         sys.exit(1)
 
-    # 3. Optional: Tabellen leeren
+    # 3. Schema-Migrationen prüfen
+    try:
+        ensure_schema_up_to_date(engine)
+    except Exception as e:
+        print(f"⚠️  Schema-Migration übersprungen ({e})")
+
+    # 4. Optional: Tabellen leeren
     if truncate:
         try:
             truncate_tables(engine)
