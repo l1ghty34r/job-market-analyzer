@@ -99,11 +99,24 @@ def load_jobs() -> pd.DataFrame:
 
 @st.cache_data(ttl=3600)
 def load_skills() -> pd.DataFrame:
-    """Lädt die normalisierte Skill-Tabelle (gecacht für 1 Stunde)."""
+    """Lädt die Skill-Erwähnungen pro Job (gecacht für 1 Stunde).
+
+    Liefert ein DataFrame mit Spalten 'job_id' und 'skill', wo jede Zeile
+    eine Skill-Erwähnung in einem Job ist (m:n-Bridge).
+    """
     engine = _try_postgres_engine()
     if engine is not None:
-        df = pd.read_sql("SELECT * FROM v_jobs_with_skills WHERE skill_name IS NOT NULL", engine)
-        return df.rename(columns={"skill_name": "skill"})
+        from sqlalchemy import text
+        # Bridge-Tabelle nutzen (verlässlicher als View)
+        df = pd.read_sql(
+            text("""
+                SELECT js.job_id, s.skill_name AS skill
+                FROM job_skills js
+                JOIN skills s ON js.skill_id = s.skill_id
+            """),
+            engine,
+        )
+        return df
 
     path = EXPORT_DIR / "job_skills.csv"
     if not path.exists():
@@ -118,7 +131,40 @@ def load_skills() -> pd.DataFrame:
 
 @st.cache_data(ttl=3600)
 def load_jobs_with_skills() -> pd.DataFrame:
-    """Lädt Jobs inklusive ihrer Skill-Listen (gecacht für 1 Stunde)."""
+    """Lädt Jobs inklusive ihrer Skill-Listen (gecacht für 1 Stunde).
+
+    Funktioniert mit beiden Backends:
+    - Postgres: aggregiert Skills pro Job über die job_skills-Bridge-Tabelle
+    - CSV: liest die exportierte jobs_with_skills.csv
+    """
+    engine = _try_postgres_engine()
+    if engine is not None:
+        # Aus Postgres: Jobs + aggregierte Skills pro Job
+        from sqlalchemy import text
+        query = text("""
+            SELECT
+                j.*,
+                COALESCE(
+                    array_agg(s.skill_name) FILTER (WHERE s.skill_name IS NOT NULL),
+                    ARRAY[]::text[]
+                ) AS skills_found
+            FROM jobs j
+            LEFT JOIN job_skills js ON j.job_id = js.job_id
+            LEFT JOIN skills s ON js.skill_id = s.skill_id
+            GROUP BY j.job_id
+        """)
+        df = pd.read_sql(query, engine)
+        # skills_found in String-Liste umwandeln (kompatibel mit ast.literal_eval im Frontend)
+        df["skills_found"] = df["skills_found"].apply(
+            lambda arr: str(list(arr)) if arr is not None else "[]"
+        )
+        if "job_posted_at_datetime_utc" in df.columns:
+            df["job_posted_at_datetime_utc"] = pd.to_datetime(
+                df["job_posted_at_datetime_utc"], errors="coerce", utc=True
+            )
+        return df
+
+    # Fallback: CSV-Datei
     path = EXPORT_DIR / "jobs_with_skills.csv"
     if not path.exists():
         st.error(
@@ -127,7 +173,12 @@ def load_jobs_with_skills() -> pd.DataFrame:
         )
         st.stop()
 
-    return pd.read_csv(path)
+    df = pd.read_csv(path)
+    if "job_posted_at_datetime_utc" in df.columns:
+        df["job_posted_at_datetime_utc"] = pd.to_datetime(
+            df["job_posted_at_datetime_utc"], errors="coerce", utc=True
+        )
+    return df
 
 
 def kpi_metrics(jobs: pd.DataFrame, skills: pd.DataFrame) -> dict:
