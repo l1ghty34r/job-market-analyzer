@@ -1,0 +1,16 @@
+[theme]
+# Modernes dunkles Theme — auf Indigo/Violett basiert
+base = "dark"
+
+# Hauptfarbe: kräftiges Indigo (Streamlit-typisch, aber moderner)
+primaryColor = "#818cf8"
+
+# Hintergründe
+backgroundColor = "#0f172a"           # tiefes Slate-Schwarz
+secondaryBackgroundColor = "#1e293b"  # leicht heller für Cards/Inputs
+
+# Text
+textColor = "#e2e8f0"                 # warmes Hellgrau
+
+# Schrift
+font = "sans serif"
