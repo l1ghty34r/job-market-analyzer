@@ -132,8 +132,12 @@ def load_jobs(engine: Engine, jobs_df: pd.DataFrame) -> int:
 
     df = jobs_df[list(available.keys())].rename(columns=available).copy()
 
-    # NaN → None für saubere INSERTs (sonst macht psycopg2 'nan' draus)
-    df = df.where(pd.notna(df), None)
+    # Datetime-Spalten sauber parsen (verhindert "NaN ist double" Fehler)
+    for dt_col in ("job_posted_at_utc",):
+        if dt_col in df.columns:
+            df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce", utc=True)
+            # NaT → None (psycopg2 versteht None als SQL NULL)
+            df[dt_col] = df[dt_col].astype(object).where(df[dt_col].notna(), None)
 
     # Boolean-Spalte sauber konvertieren
     if "job_is_remote" in df.columns:
@@ -141,6 +145,9 @@ def load_jobs(engine: Engine, jobs_df: pd.DataFrame) -> int:
             lambda x: True if str(x).lower() == "true" else
                       False if str(x).lower() == "false" else None
         )
+
+    # NaN → None für alle anderen Spalten (Float NaN würde sonst als 'nan' landen)
+    df = df.astype(object).where(pd.notna(df), None)
 
     # UPSERT-Statement: bei Konflikt auf job_id → Werte aktualisieren
     columns = list(df.columns)
