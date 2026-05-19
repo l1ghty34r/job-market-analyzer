@@ -299,10 +299,19 @@ def render(jobs_with_skills: pd.DataFrame):
     # ─────────────────────────────────────────────────────────────────
     # SORTIERUNG: NEUESTE ZUERST
     # ─────────────────────────────────────────────────────────────────
-    if "job_posted_at_datetime_utc" in df.columns:
-        df["_sort_date"] = pd.to_datetime(
-            df["job_posted_at_datetime_utc"], errors="coerce", utc=True
-        )
+    date_col = next(
+        (c for c in ["job_posted_at_datetime_utc", "job_posted_at"] if c in df.columns),
+        None,
+    )
+    if date_col:
+        df["_sort_date"] = pd.to_datetime(df[date_col], errors="coerce", utc=True)
+        # Fallback: zweite Spalte für fehlende Werte
+        for fallback in ["job_posted_at_datetime_utc", "job_posted_at"]:
+            if fallback in df.columns and fallback != date_col:
+                df["_sort_date"] = df["_sort_date"].fillna(
+                    pd.to_datetime(df[fallback], errors="coerce", utc=True)
+                )
+                break
         df = df.sort_values("_sort_date", ascending=False, na_position="last")
         df = df.drop(columns=["_sort_date"]).reset_index(drop=True)
 
